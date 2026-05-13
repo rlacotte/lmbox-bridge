@@ -1,0 +1,23 @@
+# Build artifacts
+/bin/
+*.out
+
+# Go
+*.test
+coverage.txt
+
+# Editors
+.vscode/
+.idea/
+*.swp
+.DS_Store
+
+# Local config / certs that should never leak to the repo
+/local/
+*.crt
+*.key
+*.pem
+*.crl
+config.yaml
+!examples/config.yaml
+!deploy/**/*.yaml

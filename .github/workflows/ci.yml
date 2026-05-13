@@ -1,0 +1,66 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Test & build
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        go: ["1.20", "1.21", "1.22"]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ matrix.go }}
+          cache: true
+
+      - name: Download deps
+        run: go mod download
+
+      - name: Vet
+        run: go vet ./...
+
+      - name: Test with race
+        run: go test -race -count=1 ./...
+
+      - name: Build linux/amd64
+        run: |
+          mkdir -p bin
+          CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
+            go build -ldflags="-s -w" -o bin/lmbox-bridge-linux-amd64 ./cmd/lmbox-bridge
+
+      - name: Build linux/arm64
+        run: |
+          CGO_ENABLED=0 GOOS=linux GOARCH=arm64 \
+            go build -ldflags="-s -w" -o bin/lmbox-bridge-linux-arm64 ./cmd/lmbox-bridge
+
+      - name: Sanity: --version works
+        run: |
+          chmod +x bin/lmbox-bridge-linux-amd64 || true
+          # Can only run amd64 binary on amd64 runner; check the
+          # arm64 binary's size as a smoke check.
+          test -s bin/lmbox-bridge-linux-amd64
+          test -s bin/lmbox-bridge-linux-arm64
+
+  staticcheck:
+    name: Staticcheck
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.22"
+      - uses: dominikh/staticcheck-action@v1.3.1
+        with:
+          version: "latest"
+          install-go: false

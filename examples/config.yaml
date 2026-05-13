@@ -1,0 +1,89 @@
+# LMbox Bridge — example configuration.
+#
+# Copy to /etc/lmbox-bridge/config.yaml and adjust paths.
+# The file is read once at startup. Restart the service after edits :
+#
+#     sudo systemctl restart lmbox-bridge
+#
+# All file paths are resolved relative to THIS file's directory
+# unless absolute. So `server_cert: server.crt` works when both
+# config.yaml and server.crt live in /etc/lmbox-bridge/.
+
+# ─── Listener facing the LMbox boxes on the customer LAN ───────
+listen:
+  address: "0.0.0.0:8443"
+  server_cert: certs/bridge-server.crt    # cert presented to incoming boxes
+  server_key: certs/bridge-server.key
+  client_ca_file: certs/box-ca.pem        # CA bundle that issued box client certs
+  read_timeout: 30s
+  write_timeout: 60s
+  idle_timeout: 120s
+
+# ─── Outbound to LMbox cloud ────────────────────────────────────
+upstream:
+  url: "https://app.lmbox.eu"
+  client_cert: certs/bridge-out.crt       # Bridge's own client cert for mTLS to cloud
+  client_key: certs/bridge-out.key
+  # Optional. Empty uses system roots, which works against the
+  # LMbox cloud's public cert. Set when running against staging or
+  # a private CA.
+  root_ca_file: ""
+  dial_timeout: 10s
+  response_timeout: 30s
+  # Default allowlist covers heartbeats + agent uploads. Add new
+  # prefixes explicitly when a new LMbox cloud endpoint goes live.
+  allowed_paths:
+    - "/api/heartbeats/"
+    - "/api/agents/"
+
+# ─── Authentication ────────────────────────────────────────────
+auth:
+  # Box client certs must have CN matching this regex. The factory
+  # provisioning pipeline issues certs with CN=BOX-<serial>.
+  serial_pattern: "^BOX-[A-Z0-9-]{6,40}$"
+  # Path to a PEM-encoded X.509 CRL listing revoked box certs.
+  # Empty = revocation disabled (acceptable for dev, NOT recommended
+  # in production — leave the file in place even if empty so the
+  # ops team knows where to drop a new CRL).
+  revocation_list_file: certs/box-revocations.crl
+  revocation_check_interval: 5m
+
+# ─── Audit chain ────────────────────────────────────────────────
+audit:
+  # Path where each request is appended as JSON, one per line. The
+  # chain's SHA-256 hashes lets the operator (or a regulator) prove
+  # no entry has been silently changed.
+  file: /var/lib/lmbox-bridge/audit.log
+  # Genesis string mixed into the first hash. MUST be unique per
+  # Bridge enrolment so two customers' chains can never collide.
+  # Convention: "<customer-id>|<enrolment-iso8601>"
+  genesis: "acme-industries-2026|2026-05-13T09:00:00Z"
+  # Optional: also forward each entry to syslog for SIEM ingestion.
+  # syslog_address: "127.0.0.1:514"
+
+# ─── Rate limiting ──────────────────────────────────────────────
+rate_limit:
+  enabled: true
+  # Per-box bucket. 10/s × burst 100 absorbs a freshly-online box
+  # replaying ~10 seconds of buffered heartbeats without dropping
+  # them, then steadies out.
+  rate: 10
+  burst: 100
+  # Global cap across the whole Bridge. Belt-and-braces against a
+  # coordinated swarm.
+  global_rate: 1000
+  global_burst: 5000
+
+# ─── Metrics + health ───────────────────────────────────────────
+metrics:
+  enabled: true
+  # Bind to localhost; expose via a scraper on the same VM. Don't
+  # bind 0.0.0.0 unless you know what you're doing — /metrics has a
+  # known memory-pressure surface under aggressive scraping.
+  address: "127.0.0.1:9090"
+  path: "/metrics"
+
+# ─── Logging ───────────────────────────────────────────────────
+logging:
+  level: info           # debug | info | warn | error
+  format: json          # json | text — json plays nicest with journald + Loki
