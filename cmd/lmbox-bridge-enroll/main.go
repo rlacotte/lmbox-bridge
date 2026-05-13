@@ -119,6 +119,8 @@ func main() {
 		os.Exit(runPackKit(os.Args[2:]))
 	case "verify-kit":
 		os.Exit(runVerifyKit(os.Args[2:]))
+	case "image-spec":
+		os.Exit(runImageSpec(os.Args[2:]))
 	case "version", "-v", "--version":
 		fmt.Printf("lmbox-bridge-enroll %s (commit=%s, built=%s, %s)\n",
 			Version, Commit, BuildDate, runtime.Version())
@@ -143,6 +145,7 @@ Subcommands:
   mint-box-cert          Mint a box client cert (factory provisioning)
   pack-kit               Tar.gz + HMAC-sign the deliverable for the RSSI
   verify-kit             Re-check a kit's HMAC against the partner key
+  image-spec             Produce the Talos machineconfig for a box (ZTP)
   version                Print version
 
 Run `+"`"+`lmbox-bridge-enroll <subcmd> --help`+"`"+` for subcommand flags.
