@@ -75,28 +75,43 @@ and the [ADR](docs/adr/0001-bridge-design.md).
 ## Module layout
 
 ```
-cmd/lmbox-bridge/        entrypoint + subcommands (serve, verify, version)
-internal/config/         YAML loader + validation
-internal/audit/          SHA-256 chained log + Resume / Verify
-internal/ratelimit/      Token bucket per-box + global
-internal/auth/           Cert validation + CRL with periodic reload
-internal/proxy/          HTTPS reverse proxy with allowlist + header scrub
-internal/server/         mTLS server orchestrating the middleware stack
-internal/metrics/        Prometheus registry
-internal/health/         Liveness + readiness probes
-deploy/                  systemd unit + Dockerfile
-examples/                annotated config.yaml
-docs/                    INSTALL, ARCHITECTURE, ADR
+cmd/lmbox-bridge/         runtime binary (serve, verify, version)
+cmd/lmbox-bridge-enroll/  enrolment CLI (customer-init, mint-*, pack-kit, verify-kit)
+internal/config/          YAML loader + validation
+internal/audit/           SHA-256 chained log + Resume / Verify
+internal/ratelimit/       Token bucket per-box + global
+internal/auth/            Cert validation + CRL with periodic reload
+internal/proxy/           HTTPS reverse proxy with allowlist + header scrub
+internal/server/          mTLS server orchestrating the middleware stack
+internal/pki/             X.509 primitives (root CA, server/client mint, CRL)
+internal/kit/             Tarball pack + HMAC sign + verify + safe extract
+internal/metrics/         Prometheus registry
+internal/health/          Liveness + readiness probes
+deploy/                   systemd unit + Dockerfile
+examples/                 annotated config.yaml
+docs/                     INSTALL (RSSI), ENROLL (operator), ARCHITECTURE, ADR
 ```
 
 ## Status
 
-`0.1.0` — production-grade core (mTLS in/out, audit chain, rate
-limit, allowlist, audit verify CLI, systemd + Docker deploy). One
-E2E test exercises every rejection path with real generated certs.
+`0.1.0` — production-grade core :
 
-Roadmap : ACME auto-renewal of the Bridge's own cert, OCSP stapling,
-metrics for per-cipher distribution, Talos Linux extension package.
+- mTLS in/out · audit chain (Resume + Verify) · rate limit · path
+  allowlist · header scrub · Prometheus metrics · health/readiness
+- E2E test exercises every Bridge rejection path with real
+  generated certs (`internal/server/server_e2e_test.go`)
+- **Enrolment pipeline** (`lmbox-bridge-enroll`) :
+  customer-init → mint-bridge-server → mint-bridge-outbound →
+  mint-box-cert → pack-kit → verify-kit, with a full
+  enrolment-to-bridge-boot E2E test
+  (`cmd/lmbox-bridge-enroll/e2e_test.go`)
+- systemd hardened unit + distroless Docker image
+- 2 ADRs : [0001 Bridge design](docs/adr/0001-bridge-design.md),
+  [0002 Enrolment pipeline](docs/adr/0002-enrolment-pipeline.md)
+
+Roadmap : `revoke` subcommand, HSM/KMS backing for the cloud CA
+key, ACME auto-renewal of the Bridge's own cert, OCSP stapling,
+Talos Linux extension package.
 
 ## License
 
