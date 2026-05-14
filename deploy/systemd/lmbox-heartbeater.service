@@ -1,0 +1,47 @@
+# lmbox-heartbeater — daemon qui poste le heartbeat box → cloud.
+#
+# Démarré par Talos après que lmbox-bridge (DMZ client) + lmbox-rag
+# (box) + ollama soient up. Pas critique pour le booting de la box —
+# une absence de heartbeat ne casse rien fonctionnellement, juste
+# le cloud verra la box drift en "offline" dans la Fleet Console.
+#
+# Hardening : process non-root, lecture seule sur /etc et /var/lib
+# sauf /var/lib/lmbox/box (où OpenClaw écrit les acks à drainer).
+
+[Unit]
+Description=lmbox-heartbeater (box → cloud heartbeat composer)
+After=lmbox-rag.service lmbox-bridge-client.service network-online.target
+Wants=lmbox-rag.service
+
+[Service]
+Type=simple
+User=lmbox
+Group=lmbox
+WorkingDirectory=/opt/lmbox
+
+# Variables injectées par Talos machineconfig depuis /etc/lmbox/heartbeater.env
+EnvironmentFile=/etc/lmbox/heartbeater.env
+
+# Defaults runtime (override possibles dans heartbeater.env)
+Environment="LMBOX_HEARTBEAT_INTERVAL_SECONDS=60"
+Environment="LMBOX_BOX_JSON=/etc/lmbox/box.json"
+Environment="LMBOX_RAG_STATS_URL=http://127.0.0.1:3300/api/v1/health/stats"
+Environment="LMBOX_ACK_PATH=/var/lib/lmbox/box/commands-ack.json"
+
+ExecStart=/usr/local/bin/lmbox-heartbeater
+
+Restart=on-failure
+RestartSec=5s
+TimeoutStartSec=30
+TimeoutStopSec=10
+
+# Hardening
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/lmbox/box
+ReadOnlyPaths=/etc/lmbox
+
+[Install]
+WantedBy=multi-user.target
